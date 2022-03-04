@@ -1,0 +1,18 @@
+Parsing the election data
+
+```{r}
+
+election_2020_raw <- read.csv('countypres_2000-2020.csv', header=TRUE, sep=",") #election data
+
+election_2020_raw$state <- as.factor(election_2020_raw$state)
+election_2020_raw$county_name <- as.factor(election_2020_raw$county_name)
+election_2020_raw$candidate <- as.factor(election_2020_raw$candidate)
+election_2020_raw$party <- as.factor(election_2020_raw$party)
+
+election_2020_counties <- election_2020_raw %>% filter(year==2020) %>% group_by(county_name) %>%  filter(candidatevotes == max(candidatevotes, na.rm=TRUE)) %>% ungroup() # County level results
+
+election_2020_state <- election_2020_raw %>% filter(year==2020)
+election_2020_state <- aggregate(candidatevotes~state+candidate,data=election_2020_state, FUN=sum)
+election_2020_state <- election_2020_state %>% group_by(state) %>%  filter(candidatevotes == max(candidatevotes, na.rm=TRUE)) %>% ungroup() # Results per state
+
+```
