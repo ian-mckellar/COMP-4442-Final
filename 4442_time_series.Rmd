@@ -8,15 +8,16 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
+library(ggplot2)
+library(ggpubr)
 
 ```
 
 ## R Markdown
 
-Parsing the election data
+Data Parsing
 
 ```{r}
-
 election_2020_raw <- read.csv('countypres_2000-2020.csv', header=TRUE, sep=",") #election data
 
 election_2020_raw$state <- as.factor(election_2020_raw$state)
@@ -26,8 +27,42 @@ election_2020_raw$party <- as.factor(election_2020_raw$party)
 
 election_2020_counties <- election_2020_raw %>% filter(year==2020) %>% group_by(county_name) %>%  filter(candidatevotes == max(candidatevotes, na.rm=TRUE)) %>% ungroup() # County level results
 
+election_2020_counties <- droplevels(election_2020_counties) # Remove unused factors
+
 election_2020_state <- election_2020_raw %>% filter(year==2020)
 election_2020_state <- aggregate(candidatevotes~state+candidate,data=election_2020_state, FUN=sum)
 election_2020_state <- election_2020_state %>% group_by(state) %>%  filter(candidatevotes == max(candidatevotes, na.rm=TRUE)) %>% ungroup() # Results per state
+
+
+```
+
+Plots & exploratory data analysis
+
+```{r}
+# Sample data and plots for CO
+
+colorado_data <- subset(election_2020_counties, state=='COLORADO')
+
+candidate_votes_co <- ggplot(data=colorado_data, aes(x=candidate, y=candidatevotes)) +
+  geom_bar(stat="identity") + ggtitle('Votes per Candidate in CO') + scale_y_continuous(labels = scales::comma)
+
+county_candidate_co <- ggplot(data=colorado_data, aes(candidate)) +
+  geom_bar() + ggtitle('CO Counties per Candidate')
+
+
+figure <- ggarrange(candidate_votes_co, county_candidate_co,
+                    labels = c("1", "2"),
+                    ncol = 2, nrow = 1)
+figure
+
+# Add % of voter turnout per county plot?
+
+```
+
+Time Series Analysis
+
+```{r}
+
+
 
 ```
