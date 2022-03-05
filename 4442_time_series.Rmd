@@ -15,38 +15,46 @@ library(ggpubr)
 
 ## R Markdown
 
-Data Parsing
+Data Parsing / Cleanup
 
 ```{r}
-election_2020_raw <- read.csv('countypres_2000-2020.csv', header=TRUE, sep=",") #election data
 
-election_2020_raw$state <- as.factor(election_2020_raw$state)
-election_2020_raw$county_name <- as.factor(election_2020_raw$county_name)
-election_2020_raw$candidate <- as.factor(election_2020_raw$candidate)
-election_2020_raw$party <- as.factor(election_2020_raw$party)
+election_raw <- read.csv('countypres_2000-2020.csv', header=TRUE, sep=",") #election data
 
-election_2020_counties <- election_2020_raw %>% filter(year==2020) %>% group_by(county_name) %>%  filter(candidatevotes == max(candidatevotes, na.rm=TRUE)) %>% ungroup() # County level results
+election_raw$state <- as.factor(election_raw$state)
+election_raw$county_name <- as.factor(election_raw$county_name)
+election_raw$candidate <- as.factor(election_raw$candidate)
+election_raw$party <- as.factor(election_raw$party)
 
-election_2020_counties <- droplevels(election_2020_counties) # Remove unused factors
+election_2020_counties_won <- election_raw %>% filter(year==2020) %>% group_by(county_name) %>%  filter(candidatevotes == max(candidatevotes, na.rm=TRUE)) %>% ungroup() # County level results
 
-election_2020_state <- election_2020_raw %>% filter(year==2020)
+election_2020 <- election_raw %>% filter(year==2020) # County level total votes
+
+election_2020_counties_won <- droplevels(election_2020_counties_won) # Remove unused factors
+election_2020 <- droplevels(election_2020)
+
+election_2020_state <- election_raw %>% filter(year==2020)
 election_2020_state <- aggregate(candidatevotes~state+candidate,data=election_2020_state, FUN=sum)
 election_2020_state <- election_2020_state %>% group_by(state) %>%  filter(candidatevotes == max(candidatevotes, na.rm=TRUE)) %>% ungroup() # Results per state
 
+election_2020_state <- droplevels(election_2020_state)
 
 ```
 
 Plots & exploratory data analysis
 
 ```{r}
+
 # Sample data and plots for CO
 
-colorado_data <- subset(election_2020_counties, state=='COLORADO')
+colorado_data <- subset(election_2020, state=='COLORADO')
+colorado_data_counties_won <- subset(election_2020_counties_won, state=='COLORADO')
 
 candidate_votes_co <- ggplot(data=colorado_data, aes(x=candidate, y=candidatevotes)) +
-  geom_bar(stat="identity") + ggtitle('Votes per Candidate in CO') + scale_y_continuous(labels = scales::comma)
+  geom_col() + scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(guide = guide_axis(n.dodge=2)) + ggtitle('Votes per Candidate in CO')
 
-county_candidate_co <- ggplot(data=colorado_data, aes(candidate)) +
+county_candidate_co <- ggplot(data=colorado_data_counties_won, aes(candidate)) +
   geom_bar() + ggtitle('CO Counties per Candidate')
 
 
