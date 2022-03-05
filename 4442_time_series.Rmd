@@ -1,3 +1,18 @@
+---
+title: "COMP-4442 Final Project"
+author: "Zack Larson, Ian McKellar, Suvechhya Pokhrel"
+date: "3/2/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+
+```
+
+## R Markdown
+
 Parsing the election data
 
 ```{r}
