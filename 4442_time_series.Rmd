@@ -10,6 +10,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
 library(ggpubr)
+library(tidyverse)
+library(stringr)
+library(plotly)
 
 ```
 
@@ -39,6 +42,28 @@ election_2020_state <- election_2020_state %>% group_by(state) %>%  filter(candi
 
 election_2020_state <- droplevels(election_2020_state)
 
+
+# Loading the covid vaccine data
+
+tscounty <- read.csv("counties.timeseries.csv", sep = ",")
+#str(tscounty)
+
+#filtering and cleaning data according to our need
+
+tscounty.final <- dplyr::select(tscounty,date,country,state,fips,county,actuals.cases,actuals.vaccinationsCompleted)
+str(tscounty.final)
+
+
+tscounty.final %>% replace_na(list(actuals.cases = 0, actuals.vaccinationsCompleted = 0))
+
+
+#merging state and county columns to know which county and state will be included as our sample
+tscounty.final$combined <- str_c(tscounty.final$county,",",tscounty.final$state)
+
+#We can also categorize them into democrat and republic and then take 5 samples from each group
+sample.county <- sample(tscounty.final$combined,12)
+sample.county
+
 ```
 
 Plots & exploratory data analysis
@@ -64,6 +89,23 @@ figure <- ggarrange(candidate_votes_co, county_candidate_co,
 figure
 
 # Add % of voter turnout per county plot?
+
+
+#Visualizing the vaccination rates in selected counties
+tscounty.final %>% filter (combined %in% sample.county)%>% ggplot(aes(x = date, y = actuals.vaccinationsCompleted,group=combined, color = combined)) +
+  geom_line(size = 1.25)+
+  facet_wrap(~ combined, scales = 'free_y', ncol = 3) +
+  theme(legend.position = 'none') + 
+  labs(color = '', x = 'Month', y = 'Cumulative Vaccinations By County') +
+  scale_color_brewer(type = 'qual', palette = 'Paired')
+
+# Creating an interactive plot using plotly
+p = ggplot2::last_plot() + geom_line(size = 0.75) + # modifying the plot for plotly
+  theme_bw(base_size = 9) + theme(legend.position = 'none') # to make margins smaller
+ggplotly(p, height = 900)
+
+fig <- plotly_build(p)
+fig
 
 ```
 
