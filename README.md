@@ -4,4 +4,5 @@
 \
 &nbsp;census data: https://www.census.gov/data.html
 \
-&nbsp;covid data: https://www.kaggle.com/sudalairajkumar/covid19-in-usa
+&nbsp;covid data: https://api.covidactnow.org/v2/counties.timeseries.csv?apiKey=e475ed8fe32f46a5b79815adfab9dae2
+
