@@ -13,6 +13,7 @@ library(ggpubr)
 library(tidyverse)
 library(stringr)
 library(plotly)
+library(forecast)
 
 ```
 
@@ -22,23 +23,30 @@ Data Parsing / Cleanup
 
 ```{r}
 
-election_raw <- read.csv('countypres_2000-2020.csv', header=TRUE, sep=",") #election data
+election_raw <- read.csv('countypres_2000-2020.csv', header = TRUE, sep = ",") #election data
 
 election_raw$state <- as.factor(election_raw$state)
 election_raw$county_name <- as.factor(election_raw$county_name)
 election_raw$candidate <- as.factor(election_raw$candidate)
 election_raw$party <- as.factor(election_raw$party)
 
-election_2020_counties_won <- election_raw %>% filter(year==2020) %>% group_by(county_name) %>%  filter(candidatevotes == max(candidatevotes, na.rm=TRUE)) %>% ungroup() # County level results
+election_2020_counties_won <- election_raw %>%
+  filter(year == 2020) %>%
+  group_by(county_name) %>%
+  filter(candidatevotes == max(candidatevotes, na.rm = TRUE)) %>%
+  ungroup() # County level results
 
-election_2020 <- election_raw %>% filter(year==2020) # County level total votes
+election_2020 <- election_raw %>% filter(year == 2020) # County level total votes
 
 election_2020_counties_won <- droplevels(election_2020_counties_won) # Remove unused factors
 election_2020 <- droplevels(election_2020)
 
-election_2020_state <- election_raw %>% filter(year==2020)
-election_2020_state <- aggregate(candidatevotes~state+candidate,data=election_2020_state, FUN=sum)
-election_2020_state <- election_2020_state %>% group_by(state) %>%  filter(candidatevotes == max(candidatevotes, na.rm=TRUE)) %>% ungroup() # Results per state
+election_2020_state <- election_raw %>% filter(year == 2020)
+election_2020_state <- aggregate(candidatevotes ~ state + candidate, data = election_2020_state, FUN = sum)
+election_2020_state <- election_2020_state %>%
+  group_by(state) %>%
+  filter(candidatevotes == max(candidatevotes, na.rm = TRUE)) %>%
+  ungroup() # Results per state
 
 election_2020_state <- droplevels(election_2020_state)
 
@@ -50,7 +58,7 @@ tscounty <- read.csv("counties.timeseries.csv", sep = ",")
 
 #filtering and cleaning data according to our need
 
-tscounty.final <- dplyr::select(tscounty,date,country,state,fips,county,actuals.cases,actuals.vaccinationsCompleted)
+tscounty.final <- dplyr::select(tscounty, date, country, state, fips, county, actuals.cases, actuals.vaccinationsCompleted)
 str(tscounty.final)
 
 
@@ -58,29 +66,35 @@ tscounty.final %>% replace_na(list(actuals.cases = 0, actuals.vaccinationsComple
 
 
 #merging state and county columns to know which county and state will be included as our sample
-tscounty.final$combined <- str_c(tscounty.final$county,",",tscounty.final$state)
+tscounty.final$combined <- str_c(tscounty.final$county, ",", tscounty.final$state)
 
 #We can also categorize them into democrat and republic and then take 5 samples from each group
-sample.county <- sample(tscounty.final$combined,12)
+sample.county <- sample(tscounty.final$combined, 12)
 sample.county
 
 ```
-
+```{r}
+count_vaccine <- merge(x=election_2020, y=tscounty.final, by.x = "county_fips", by.y = "fips", all = TRUE)
+count_vaccine
+```
 Plots & exploratory data analysis
 
 ```{r}
 
 # Sample data and plots for CO
 
-colorado_data <- subset(election_2020, state=='COLORADO')
-colorado_data_counties_won <- subset(election_2020_counties_won, state=='COLORADO')
+colorado_data <- subset(election_2020, state == 'COLORADO')
+colorado_data_counties_won <- subset(election_2020_counties_won, state == 'COLORADO')
 
-candidate_votes_co <- ggplot(data=colorado_data, aes(x=candidate, y=candidatevotes)) +
-  geom_col() + scale_y_continuous(labels = scales::comma) +
-  scale_x_discrete(guide = guide_axis(n.dodge=2)) + ggtitle('Votes per Candidate in CO')
+candidate_votes_co <- ggplot(data = colorado_data, aes(x = candidate, y = candidatevotes)) +
+  geom_col() +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  ggtitle('Votes per Candidate in CO')
 
-county_candidate_co <- ggplot(data=colorado_data_counties_won, aes(candidate)) +
-  geom_bar() + ggtitle('CO Counties per Candidate')
+county_candidate_co <- ggplot(data = colorado_data_counties_won, aes(candidate)) +
+  geom_bar() +
+  ggtitle('CO Counties per Candidate')
 
 
 figure <- ggarrange(candidate_votes_co, county_candidate_co,
@@ -92,16 +106,20 @@ figure
 
 
 #Visualizing the vaccination rates in selected counties
-tscounty.final %>% filter (combined %in% sample.county)%>% ggplot(aes(x = date, y = actuals.vaccinationsCompleted,group=combined, color = combined)) +
-  geom_line(size = 1.25)+
-  facet_wrap(~ combined, scales = 'free_y', ncol = 3) +
-  theme(legend.position = 'none') + 
+tscounty.final %>%
+  filter(combined %in% sample.county) %>%
+  ggplot(aes(x = date, y = actuals.vaccinationsCompleted, group = combined, color = combined)) +
+  geom_line(size = 1.25) +
+  facet_wrap(~combined, scales = 'free_y', ncol = 3) +
+  theme(legend.position = 'none') +
   labs(color = '', x = 'Month', y = 'Cumulative Vaccinations By County') +
   scale_color_brewer(type = 'qual', palette = 'Paired')
 
 # Creating an interactive plot using plotly
-p = ggplot2::last_plot() + geom_line(size = 0.75) + # modifying the plot for plotly
-  theme_bw(base_size = 9) + theme(legend.position = 'none') # to make margins smaller
+p <- ggplot2::last_plot() +
+  geom_line(size = 0.75) + # modifying the plot for plotly
+  theme_bw(base_size = 9) +
+  theme(legend.position = 'none') # to make margins smaller
 ggplotly(p, height = 900)
 
 fig <- plotly_build(p)
@@ -112,107 +130,27 @@ fig
 Time Series Analysis
 
 ```{r}
-
-
-
+count_vaccine_col <- subset(count_vaccine, state.x == 'COLORADO')
+count_vaccine_col$date <- as.character.Date(count_vaccine_col$date)
+count_vaccine_col <- na.omit(count_vaccine_col)
+min_date <- min(count_vaccine_col$date)
+max_date <- max(count_vaccine_col$date)
+count_vaccine_col_mat <- matrix(count_vaccine_col)
+first_ts <- ts(count_vaccine_col_mat, start=min_date, end=max_date, frequency = 365.25)
+first_ts
 ```
 getting the census data
 
 ```{r}
-census_raw <- read.csv('census_data.csv', header=TRUE, sep=",",skip=1)
-names(census_raw)
+census_education <- read.csv('education/data.csv', header = TRUE, sep = ",", skip = 1)
+names(census_education)
 ```
-there are 620 columns, instead of dropping ones we don't need lets pick only the ones that we do need and make a new df of those columns.
-the ones we want to start with that we within the scope of our project are these:
-`  [1] "id"
-  [2] "Geographic.Area.Name"
-  [3] "Race.Ethnic.Group"
-  [4] "Population.Groups"
-  [5] "Estimate..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population"
-  [6] "Margin.of.Error..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population"
-  [7] "Estimate..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population..One.race"
-  [8] "Margin.of.Error..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population..One.race"
-  [9] "Estimate..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population..Two.races"
- [10] "Margin.of.Error..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population..Two.races"
- [11] "Estimate..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population..Three.races"
- [12] "Margin.of.Error..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population..Three.races"
- [13] "Estimate..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population..Four.or.more.races"
- [14] "Margin.of.Error..TOTAL.NUMBER.OF.RACES.REPORTED..Total.population..Four.or.more.races"
-[159] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school"
-[161] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..Nursery.school..preschool"
-[163] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..Kindergarten"
-[165] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..Elementary.school..grades.1.8."
-[167] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..High.school..grades.9.12."
-[169] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..College.or.graduate.school"
-[171] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..Male.3.years.and.over.enrolled.in.school"
-[173] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..Male.3.years.and.over.enrolled.in.school..Percent.enrolled.in.kindergarten.to.grade.12"
-[175] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..Male.3.years.and.over.enrolled.in.school..Percent.enrolled.in.college.or.graduate.school"
-[177] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..Female.3.years.and.over.enrolled.in.school"
-[179] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..Female.3.years.and.over.enrolled.in.school..Percent.enrolled.in.kindergarten.to.grade.12"
-[181] "Estimate..SCHOOL.ENROLLMENT..Population.3.years.and.over.enrolled.in.school..Female.3.years.and.over.enrolled.in.school..Percent.enrolled.in.college.or.graduate.school"
-[183] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over"
-[185] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..Less.than.high.school.diploma"
-[187] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..High.school.graduate..includes.equivalency."
-[189] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..Some.college.or.associate.s.degree"
-[191] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..Bachelor.s.degree"
-[193] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..Graduate.or.professional.degree"
-[195] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..High.school.graduate.or.higher"
-[197] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..High.school.graduate.or.higher..Male..high.school.graduate.or.higher"
-[199] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..High.school.graduate.or.higher..Female..high.school.graduate.or.higher"
-[201] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..Bachelor.s.degree.or.higher"
-[203] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..Bachelor.s.degree.or.higher..Male..bachelor.s.degree.or.higher"
-[205] "Estimate..EDUCATIONAL.ATTAINMENT..Population.25.years.and.over..Bachelor.s.degree.or.higher..Female..bachelor.s.degree.or.higher"
-[429] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households"
-[431] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..Median.household.income..dollars."
-[433] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.earnings"
-[435] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.earnings..Mean.earnings..dollars."
-[437] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.Social.Security.income"
-[439] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.Social.Security.income..Mean.Social.Security.income..dollars."
-[441] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.Supplemental.Security.Income"
-[443] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.Supplemental.Security.Income..Mean.Supplemental.Security.Income..dollars."
-[445] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.cash.public.assistance.income"
-[447] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.cash.public.assistance.income..Mean.cash.public.assistance.income..dollars."
-[449] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.retirement.income"
-[451] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.retirement.income..Mean.retirement.income..dollars."
-[453] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Households..With.Food.Stamp.SNAP.benefits"
-[455] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Families"
-[457] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Families..Median.family.income..dollars."
-[459] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Families..Median.family.income..dollars...Married.couple.family"
-[461] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Families..Median.income..dollars."
-[463] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Families..Median.income..dollars...Male.householder..no.spouse.present..family"
-[465] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Families..Median.income..dollars..1"
-[467] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Families..Median.income..dollars...Female.householder..no.husband.present..family"
-[469] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Families..Median.income..dollars..2"
-[471] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Individuals"
-[473] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Individuals..Per.capita.income..dollars."
-[475] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Individuals..With.earnings.for.full.time..year.round.workers...Male"
-[477] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Individuals..With.earnings.for.full.time..year.round.workers...Female"
-[479] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Individuals..Mean.earnings..dollars...for.full.time..year.round.workers...Male"
-[481] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Individuals..Mean.earnings..dollars...for.full.time..year.round.workers...Female"
-[483] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Individuals..Median.earnings..dollars..full.time..year.round.workers...Male"
-[485] "Estimate..INCOME.IN.THE.PAST.12.MONTHS..IN.2019.INFLATION.ADJUSTED.DOLLARS...Individuals..Median.earnings..dollars..full.time..year.round.workers...Female"
-[495] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.families"
-[497] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.families..With.related.children.of.the.householder.under.18.years"
-[499] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.families..With.related.children.of.the.householder.under.18.years..With.related.children.of.the.householder.under.5.years.only"
-[501] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.families..Married.couple.family"
-[503] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.families..Married.couple.family..With.related.children.of.the.householder.under.18.years"
-[505] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.families..Married.couple.family..With.related.children.of.the.householder.under.18.years..With.related.children.of.the.householder.under.5.years.only"
-[507] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.families..Female.householder..no.spouse.present..family"
-[509] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.families..Female.householder..no.spouse.present..family..With.related.children.of.the.householder.under.18.years"
-[511] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.families..Female.householder..no.spouse.present..family..With.related.children.of.the.householder.under.18.years..With.related.children.of.the.householder.under.5.years.only"
-[513] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people"
-[515] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people..Under.18.years"
-[517] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people..Under.18.years..Related.children.of.the.householder.under.18.years"
-[519] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people..Under.18.years..Related.children.of.the.householder.under.18.years..Related.children.of.the.householder.under.5.years"
-[521] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people..Under.18.years..Related.children.of.the.householder.under.18.years..Related.children.of.the.householder.5.to.17.years"
-[523] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people..18.years.and.over"
-[525] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people..18.years.and.over..18.to.64.years"
-[527] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people..18.years.and.over..65.years.and.over"
-[529] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people..People.in.families"
-[531] "Estimate..POVERTY.RATES.FOR.FAMILIES.AND.PEOPLE.FOR.WHOM.POVERTY.STATUS.IS.DETERMINED..All.people..Unrelated.individuals.15.years.and.over"
-[615] "Estimate..COMPUTERS.AND.INTERNET.USE..Total.households"
-[617] "Estimate..COMPUTERS.AND.INTERNET.USE..Total.households..With.a.computer"
-[619] "Estimate..COMPUTERS.AND.INTERNET.USE..Total.households..With.a.broadband.Internet.subscription"`
+```{r}
+census_income <- read.csv('income/data.csv', header = TRUE, sep = ",", skip = 1)
+names(census_income)
+```
 
 ```{r}
+census_race <- read.csv('race/data.csv', header = TRUE, sep = ",", skip = 1)
+names(census_race)
 ```
