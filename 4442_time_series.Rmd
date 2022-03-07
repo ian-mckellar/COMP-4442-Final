@@ -59,7 +59,7 @@ tscounty <- read.csv("counties.timeseries.csv", sep = ",")
 #filtering and cleaning data according to our need
 
 tscounty.final <- dplyr::select(tscounty, date, country, state, fips, county, actuals.cases, actuals.vaccinationsCompleted)
-str(tscounty.final)
+#str(tscounty.final)
 
 
 tscounty.final %>% replace_na(list(actuals.cases = 0, actuals.vaccinationsCompleted = 0))
@@ -70,12 +70,12 @@ tscounty.final$combined <- str_c(tscounty.final$county, ",", tscounty.final$stat
 
 #We can also categorize them into democrat and republic and then take 5 samples from each group
 sample.county <- sample(tscounty.final$combined, 12)
-sample.county
+#sample.county
 
 ```
 ```{r}
 count_vaccine <- merge(x=election_2020, y=tscounty.final, by.x = "county_fips", by.y = "fips", all = TRUE)
-count_vaccine
+#count_vaccine
 ```
 Plots & exploratory data analysis
 
@@ -100,7 +100,7 @@ county_candidate_co <- ggplot(data = colorado_data_counties_won, aes(candidate))
 figure <- ggarrange(candidate_votes_co, county_candidate_co,
                     labels = c("1", "2"),
                     ncol = 2, nrow = 1)
-figure
+#figure
 
 # Add % of voter turnout per county plot?
 
@@ -122,8 +122,8 @@ p <- ggplot2::last_plot() +
   theme(legend.position = 'none') # to make margins smaller
 ggplotly(p, height = 900)
 
-fig <- plotly_build(p)
-fig
+#fig <- plotly_build(p)
+#fig
 
 ```
 
@@ -135,11 +135,18 @@ count_vaccine_col$date <- as.character.Date(count_vaccine_col$date)
 count_vaccine_col <- na.omit(count_vaccine_col)
 min_date <- min(count_vaccine_col$date)
 max_date <- max(count_vaccine_col$date)
-count_vaccine_col_mat <- matrix(count_vaccine_col)
-first_ts <- ts(count_vaccine_col_mat, start=min_date, end=max_date, frequency = 365.25)
-first_ts
+#count_vaccine_col_mat <- matrix(count_vaccine_col)
+first_ts <- ts(count_vaccine_col$actuals.cases)#, start=min_date, end=max_date, frequency = 365.25)
+#first_ts
+```
+```{r}
+plot.ts(first_ts)
 ```
 getting the census data
+
+```{r}
+plot(count_vaccine_col$actuals.cases)
+```
 
 ```{r}
 census_education <- read.csv('education/data.csv', header = TRUE, sep = ",", skip = 1)
