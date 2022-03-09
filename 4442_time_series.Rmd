@@ -15,6 +15,7 @@ library(stringr)
 library(plotly)
 library(forecast)
 library(lubridate)
+library(tseries)
 
 ```
 
@@ -137,52 +138,98 @@ rpo <- other_group%>%filter(party=="REPUBLICAN")%>%filter(percVote==max(percVote
 #democratic party with highest vote percentage
 dpo <- other_group%>%filter(party== "DEMOCRAT")%>%filter(percVote==max(percVote))
 
-
+# df <- data.frame(fips<-c("6075","48009","35055","48033"),values<-c("Democrat/Urban","Republican/Urban","Democrat/Rural","Republican/Rural"))
+# plot_usmap(regions="counties", data=df)
 
 #ts analysis
 
-# p<- ggplot(data = fresno_ca,aes(x=date,y=new_vacc_rate))+geom_line()+
-#     scale_x_date(date_breaks = "2 weeks", date_labels ="%d %b" )
-# print(p)
+#checking the class of our tsdata
+class(rpr)
 
 
 #putting our data in ts format
 
-ts1<- ts(data=rpr$new_vacc_rate, start =c(2021,100), frequency = 365.25)
-plot.ts(ts1)
+ts1<- ts(data=rpr$new_vacc_rate, start =decimal_date(ymd(min(rpr$date))), frequency = 365.25)
+ggplot(data=rpr, aes(x= date,y=new_vacc_rate))+geom_line()+
+  scale_x_date(date_breaks = "2 weeks", date_labels = "%b,%Y")+
+  scale_y_continuous(limits = c((-20),230))+
+  labs(x="Date", y="Daily Vaccination Rate", title= "Daily Vaccination Rates- Borden County, TX")
+  
 
-ts2<- ts(data=dpr$new_vacc_rate, start =c(2021,100), frequency = 365.25)
-plot.ts(ts2)
+ts2<- ts(data=dpr$new_vacc_rate, start=decimal_date(ymd(min(dpr$date))),frequency = 365.25)
+#plot.ts(ts2)+scale_x_date(date_labels = date)
+ggplot(data=dpr, aes(x= date,y=new_vacc_rate))+geom_line()+
+  scale_x_date(date_breaks = "2 weeks", date_labels = "%b,%Y")+
+  scale_y_continuous(limits = c((-500),3900))+
+  labs(x="Date", y="Daily Vaccination Rate", title= "Daily Vaccination Rates- Taos County, NM")+
+  theme(axis.text.x = element_text(angle=90))
 
-ts3<- ts(data=rpo$new_vacc_rate, start =c(2021,100), frequency = 365.25)
-plot.ts(ts3)
+ts3<- ts(data=rpo$new_vacc_rate, start =decimal_date(ymd(min(rpo$date))), frequency = 365.25)
+#plot.ts(ts3)
+ggplot(data=rpo, aes(x= date,y=new_vacc_rate))+geom_line()+
+  scale_x_date(date_breaks = "2 weeks", date_labels = "%b,%Y")+
+  scale_y_continuous(limits = c((-3),3860))+
+  labs(x="Date", y="Daily Vaccination Rate", title= "Daily Vaccination Rates- Archer County, TX")+
+  theme(axis.text.x = element_text(angle=90))
 
-ts4<- ts(data=dpo$new_vacc_rate, start =c(2021,100), frequency = 365.25)
-plot.ts(ts4)
+ts4<- ts(data=dpo$new_vacc_rate, start =decimal_date(ymd(min(dpo$date))), frequency = 365.25)
+#plot.ts(ts4)
+ggplot(data=dpo, aes(x= date,y=new_vacc_rate))+geom_line()+
+  scale_x_date(date_breaks = "2 weeks", date_labels = "%b,%Y")+
+  scale_y_continuous(limits = c((0),10500))+
+  labs(x="Date", y="Daily Vaccination Rate", title= "Daily Vaccination Rates- San Francisco County, CA")+
+  theme(axis.text.x = element_text(angle=90))
 
-ar1 <- auto.arima(ts1)
-ar2 <- auto.arima(ts2)
-ar3 <- auto.arima(ts3)
-ar4 <- auto.arima(ts4)
+#A time series needs to be non-seasonal and should not be a random white noise to be modeled with ARIMA model. 
+#AR(Auto regressive) means it is a linear regression model that uses its own lags as predictors 
+
+#Checking for seasonality, auto correlation
+#The Augmented Dickey Fuller Test(ADF) is unit root test for stationarity. Unit roots can cause our ts analysis to be unpredictable. 
+acf(ts1) # has not crossed the blue line so there are no issue of seasonality here
+pacf(ts1)
+adf.test(ts1) # Here the p-value is less than 0.05 so we reject the null hypothesis thereby, inferring that the time series is stationary
+
+acf(ts2) # this data looks stationary as well
+pacf(ts2) #spikes have not crossed the blue line
+adf.test(ts2) # p-value is less than 0.05 indicating that the time series is stationary
+
+acf(ts3) #mostly stationary, but has some seasonality on the data
+pacf(ts3) #spike crosses the blue lines, showing there is some sesonality present
+adf.test(ts3) # The p-value is less than 0.05 inferring that the time series is stationary
+
+acf(ts4) # we can definitely see some seasonality here
+pacf(ts4) #pacf looks good though
+adf.test(ts4) # The p-value is less than 0.05 inferring that the time series is stationary
+
+
+ar1 <- auto.arima(ts1, ic="aic",trace=TRUE) 
+ar2 <- auto.arima(ts2, ic="aic",trace=TRUE)
+ar3 <- auto.arima(ts3, ic="aic",trace=TRUE)
+ar4 <- auto.arima(ts4, ic="aic",trace=TRUE)
 
 # # plotting the residuals
 plot.ts(ar1$residuals)
 plot.ts(ar2$residuals)
 plot.ts(ar3$residuals)
 plot.ts(ar4$residuals)
+acf(ar4$residuals)
 
-#forecast the values for next 5 months
+#forecast the values for next 350 days
 forecast1 <- forecast(ar1,h=350)
+forecast1
 plot(forecast1)
 
 forecast2 <- forecast(ar2,h=350)
+forecast2
 plot(forecast2)
 
 forecast3 <- forecast(ar3,h=350)
 plot(forecast3)
+forecast3
 
 forecast4 <- forecast(ar4,h=350)
 plot(forecast4)
+forecast4
 ```
 Plots & exploratory data analysis
 
