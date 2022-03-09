@@ -23,33 +23,30 @@ library(lubridate)
 Data Parsing / Cleanup
 
 ```{r}
-# 
-# election_raw <- read.csv('countypres_2000-2020.csv', header = TRUE, sep = ",") #election data
-# 
-# election_raw$state <- as.factor(election_raw$state)
-# election_raw$county_name <- as.factor(election_raw$county_name)
-# election_raw$candidate <- as.factor(election_raw$candidate)
-# election_raw$party <- as.factor(election_raw$party)
-# 
-# election_2020_counties_won <- election_raw %>%
-#   filter(year == 2020) %>%
-#   group_by(county_name) %>%
-#   filter(candidatevotes == max(candidatevotes, na.rm = TRUE)) %>%
-#   ungroup() # County level results
-# 
-# election_2020 <- election_raw %>% filter(year == 2020) # County level total votes
-# 
-# election_2020_counties_won <- droplevels(election_2020_counties_won) # Remove unused factors
-# election_2020 <- droplevels(election_2020)
-# 
-# election_2020_state <- election_raw %>% filter(year == 2020)
-# election_2020_state <- aggregate(candidatevotes ~ state + candidate, data = election_2020_state, FUN = sum)
-# election_2020_state <- election_2020_state %>%
-#   group_by(state) %>%
-#   filter(candidatevotes == max(candidatevotes, na.rm = TRUE)) %>%
-#   ungroup() # Results per state
-# 
-# election_2020_state <- droplevels(election_2020_state)
+
+election_raw <- read.csv('countypres_2000-2020.csv', header = TRUE, sep = ",") #election data
+
+election_raw$state <- as.factor(election_raw$state)
+election_raw$county_name <- as.factor(election_raw$county_name)
+election_raw$candidate <- as.factor(election_raw$candidate)
+election_raw$party <- as.factor(election_raw$party)
+
+election_2020_counties_won <- election_raw %>%
+  filter(year == 2020) %>%
+  group_by(county_name) %>%
+  filter(candidatevotes == max(candidatevotes, na.rm = TRUE)) %>%
+  ungroup() # County level results
+
+election_2020 <- election_raw %>% filter(year == 2020) # County level total votes
+
+election_2020_counties_won <- droplevels(election_2020_counties_won)%>%  # Remove unused factors
+mutate(fips=county_fips,percVote=100*(candidatevotes/totalvotes))#computing percent of vote for winning party
+
+county_party <- dplyr::select(election_2020_counties_won, fips,party,percVote)
+   
+#getting rural 
+ru = read.csv("https://www.consumerfinance.gov/documents/10338/cfpb_rural-underserved-list_2022.csv")%>% transmute(fips = FIPS.Code, #renaming FIPS.Code to key_numeric
+                 countyType = "Rural/Underserved") # creates two vars and drop old vars
 
 
 ```
@@ -77,34 +74,115 @@ vaccine.new <- county.vaccine %>%
   group_by(county_state)%>%
   mutate(new_vacc_rate = actuals.vaccinationsCompleted - lag(actuals.vaccinationsCompleted, default = 0))
 
-#Sample ts analysis
-fresno_ca <- subset(vaccine.new,  county_state == "Fresno County,CA")
+```
 
-p<- ggplot(data = fresno_ca,aes(x=date,y=new_vacc_rate))+geom_line()+
-    scale_x_date(date_breaks = "2 weeks", date_labels ="%d %b" )
-print(p)
+```{r}
+#find the extra fips in new dataset and remove them
+
+fips_to_remove <- unique(ru$fips[!(ru$fips%in%vaccine.new$fips)])
+str_c(fips_to_remove)
+
+ru <- ru%>%filter(!fips %in% c(fips_to_remove))
 
 
-#ts analysis of new vacc rate values
+merged <- merge(vaccine.new,ru, by.x = "fips", all= TRUE) # to define NA counties
+merged$countyType <- merged$countyType%>% replace_na("Other") # for any county not in the Consumer FIN data replace NA by Other
 
-ts1<- ts(data=fresno_ca$new_vacc_rate, start =c(2020,1), frequency = 365.25)
-plot(ts1)
+#find the extra fips in new election dataset and remove them
+fips_to_rmv <- unique(county_party$fips[!(county_party$fips%in%vaccine.new$fips)])
+str_c(fips_to_rmv)
 
-ar <- auto.arima(fresno_ca$new_vacc_rate)
-ar
+county_party<-county_party%>%filter(!fips %in% c(fips_to_rmv))
 
-# plotting the residuals
-plot.ts(ar$residuals)
+#tsdata will final merge on election data
+tsdata <- merge(merged, county_party, by.x = 'fips',all=TRUE)
+tsdata$countyType <- as.factor(tsdata$countyType)
+str(tsdata)
 
-#forecast the values for next 5 months
-forecast1 <- forecast(ar,h=150)
-plot(forecast1)
+```
+
+
+
+
+```{r}
+library(usmap)
+
+#visualizing the rural and urban counties
+plot_usmap(data=tsdata, regions = "counties",values = "countyType")
+
+#visualizing counties with republican vs democratic win
+plot_usmap(data=tsdata, regions = "counties", values="party")+
+  labs(title="County level Election Results, 2020")
 
 ```
 
 ```{r}
-# count_vaccine <- merge(x=election_2020, y=tscounty.final, by.x = "county_fips", by.y = "fips", all = TRUE)
-# #count_vaccine
+
+rural_group <- subset(tsdata, countyType %in% c("Rural/Underserved"))%>%na.omit()
+str(rural_group)
+
+#republican party with highest vote percentage
+
+rpr <- rural_group%>%filter(party=="REPUBLICAN")%>%filter(percVote==max(percVote))
+
+#democratic party with highest vote percentage
+dpr <- rural_group%>%filter(party== "DEMOCRAT")%>%filter(percVote==max(percVote))
+
+
+other_group <- subset(tsdata, countyType %in% c("Other"))%>%na.omit()
+
+##republican party with highest vote percentage
+rpo <- other_group%>%filter(party=="REPUBLICAN")%>%filter(percVote==max(percVote))
+  
+#democratic party with highest vote percentage
+dpo <- other_group%>%filter(party== "DEMOCRAT")%>%filter(percVote==max(percVote))
+
+
+
+#ts analysis
+
+# p<- ggplot(data = fresno_ca,aes(x=date,y=new_vacc_rate))+geom_line()+
+#     scale_x_date(date_breaks = "2 weeks", date_labels ="%d %b" )
+# print(p)
+
+
+#putting our data in ts format
+
+ts1<- ts(data=rpr$new_vacc_rate, start =c(2021,100), frequency = 365.25)
+plot.ts(ts1)
+
+ts2<- ts(data=dpr$new_vacc_rate, start =c(2021,100), frequency = 365.25)
+plot.ts(ts2)
+
+ts3<- ts(data=rpo$new_vacc_rate, start =c(2021,100), frequency = 365.25)
+plot.ts(ts3)
+
+ts4<- ts(data=dpo$new_vacc_rate, start =c(2021,100), frequency = 365.25)
+plot.ts(ts4)
+
+ar1 <- auto.arima(ts1)
+ar2 <- auto.arima(ts2)
+ar3 <- auto.arima(ts3)
+ar4 <- auto.arima(ts4)
+
+# # plotting the residuals
+plot.ts(ar1$residuals)
+plot.ts(ar2$residuals)
+plot.ts(ar3$residuals)
+plot.ts(ar4$residuals)
+
+#forecast the values for next 5 months
+forecast1 <- forecast(ar1,h=350)
+plot(forecast1)
+
+forecast2 <- forecast(ar2,h=350)
+plot(forecast2)
+
+forecast3 <- forecast(ar3,h=350)
+plot(forecast3)
+
+forecast4 <- forecast(ar4,h=350)
+plot(forecast4)
 ```
 Plots & exploratory data analysis
 
