@@ -314,3 +314,23 @@ Plots & exploratory data analysis
 # census_race <- read.csv('race/data.csv', header = TRUE, sep = ",", skip = 1)
 # names(census_race)
 ```
+Taxes plots
+```{r}
+TEXAS_data <- subset(election_2020, state=='TEXAS')
+TEXAS_data_counties_won <- subset(election_2020_counties_won, state=='TEXAS')
+
+candidate_votes_tx <- ggplot(data=TEXAS_data, aes(x=candidate, y=candidatevotes)) +
+  geom_col() + scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(guide = guide_axis(n.dodge=2)) + ggtitle('Votes per Candidate in TX')
+
+county_candidate_tx <- ggplot(data=TEXAS_data_counties_won, aes(candidate)) +
+  geom_bar() + ggtitle('TX Counties per Candidate')
+
+
+
+figure <- ggarrange(candidate_votes_tx, county_candidate_tx,
+                    labels = c("1", "2"),
+                    ncol = 2, nrow = 1)
+figure
+
+```
